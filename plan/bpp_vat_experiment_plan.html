@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BPP + VAT 实验方案</title>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fff; color: #000; font: 18px/1.55 Arial,"Microsoft YaHei",sans-serif; }
+    main { max-width: 1180px; margin: auto; padding: 42px 36px 70px; }
+    h1 { font-size: 36px; margin: 0 0 24px; }
+    h2 { font-size: 27px; border-bottom: 2px solid #000; padding-bottom: 8px; margin: 48px 0 19px; }
+    h3 { font-size: 22px; margin: 30px 0 12px; }
+    .algorithm-step { border-top: 1px solid #000; margin-top: 33px; padding-top: 2px; }
+    .algorithm-step h3 { margin-top: 18px; }
+    p { margin: 8px 0 15px; }
+    .goal { font-size: 22px; }
+    .diagram { width: 100%; height: auto; display: block; border: 2px solid #000; }
+    .formula { border-left: 4px solid #000; padding: 8px 18px; margin: 13px 0; overflow-x: auto; }
+    .formula mjx-container { margin: 8px 0 !important; }
+    .formula.key { font-weight: 600; }
+    .formula.compact { font-size: .86em; }
+    table { border-collapse: collapse; width: 100%; margin: 18px 0; }
+    th,td { border: 1px solid #000; padding: 11px 13px; text-align: left; vertical-align: top; }
+    th { font-weight: 700; }
+    ol { padding-left: 28px; }
+    li { margin: 10px 0; }
+    @media (max-width: 700px) { main { padding: 25px 18px 50px; } body { font-size: 17px; } .goal { font-size: 19px; } }
+    @media print { main { max-width: none; padding: 12mm; } .formula { overflow: visible; } h2,h3,table,.diagram,.formula { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>BPP + VAT 实验方案</h1>
+  <h2>1. 目标</h2>
+  <p class="goal">结合 VAT 算法改进 BPP 的 Prompt Encoder：利用单调位置对齐与可微相对偏置（IRPB）约束 Cross-Attention，根除示教学习中的轨迹回溯与死循环缺陷。</p>
+
+  <h2>2. 总流程</h2>
+  <svg class="diagram" viewBox="0 0 1130 590" role="img" aria-label="BPP 架构：左侧示教分块，中间加入 VAT 的 Prompt Encoder，右侧保持原 Diffusion Action Decoder" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="tip" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#000" stroke-width="1.7"/></marker>
+      <style>.panel{fill:#fff;stroke:#000;stroke-width:2}.block{fill:#fff;stroke:#000;stroke-width:1.8}.vat{fill:#fff;stroke:#000;stroke-width:2.2}.arrowline{fill:none;stroke:#000;stroke-width:2;marker-end:url(#tip)}.returnline{fill:none;stroke:#000;stroke-width:1.7;stroke-dasharray:6 5;marker-end:url(#tip)}.title{font:bold 20px Arial,'Microsoft YaHei',sans-serif;fill:#000;text-anchor:middle}.label{font:17px Arial,'Microsoft YaHei',sans-serif;fill:#000;text-anchor:middle}.small{font:15px Arial,'Microsoft YaHei',sans-serif;fill:#000;text-anchor:middle}</style>
+    </defs>
+    <rect class="panel" x="18" y="22" width="325" height="515"/>
+    <rect class="panel" x="390" y="22" width="420" height="515"/>
+    <rect class="panel" x="858" y="22" width="254" height="515"/>
+    <text class="title" x="180" y="60">a) 示教分块</text>
+    <text class="title" x="600" y="60">b) Prompt Encoder + VAT</text>
+    <text class="title" x="985" y="60">c) Action Decoder</text>
+
+    <rect class="block" x="40" y="103" width="281" height="62"/><text class="label" x="180" y="129">示教轨迹</text><text class="small" x="180" y="151">观测 · 本体状态 · 动作</text>
+    <path class="arrowline" d="M180 165 V205"/>
+    <rect class="block" x="43" y="208" width="82" height="86"/><rect class="block" x="139" y="208" width="82" height="86"/><rect class="block" x="235" y="208" width="82" height="86"/>
+    <text class="label" x="84" y="240">Chunk 0</text><text class="small" x="84" y="268">池化</text>
+    <text class="label" x="180" y="240">Chunk 1</text><text class="small" x="180" y="268">池化</text>
+    <text class="label" x="276" y="240">Chunk …</text><text class="small" x="276" y="268">池化</text>
+    <path class="arrowline" d="M84 294 V362"/><path class="arrowline" d="M180 294 V362"/><path class="arrowline" d="M276 294 V362"/>
+    <rect class="block" x="43" y="365" width="82" height="65"/><rect class="block" x="139" y="365" width="82" height="65"/><rect class="block" x="235" y="365" width="82" height="65"/>
+    <text class="label" x="84" y="405">h₀</text><text class="label" x="180" y="405">h₁</text><text class="label" x="276" y="405">hⱼ</text>
+    <text class="label" x="180" y="478">示教嵌入 H</text>
+
+    <rect class="block" x="420" y="91" width="157" height="61"/><text class="label" x="498" y="116">当前观测窗口</text><text class="small" x="498" y="138">xₜ</text>
+    <rect class="vat" x="420" y="188" width="360" height="178"/>
+    <text class="title" x="600" y="219">VAT 对齐模块</text>
+    <rect class="block" x="437" y="241" width="150" height="72"/><text class="label" x="512" y="269">位置注意力</text><text class="small" x="512" y="293">示教 H + 旧位置</text>
+    <rect class="block" x="610" y="241" width="151" height="72"/><text class="label" x="685" y="269">LSTM + Softplus</text><text class="small" x="685" y="293">pₜ₋₁ → pₜ</text>
+    <path class="arrowline" d="M587 277 H606"/>
+    <text class="small" x="600" y="346">状态跨机器人决策步传递</text>
+    <rect class="block" x="420" y="401" width="360" height="96"/>
+    <text class="title" x="600" y="431">Transformer</text>
+    <text class="label" x="600" y="460">Self-Attention → Cross-Attention</text>
+    <text class="small" x="600" y="482">内容分数 + IRPB(pₜ − j)</text>
+    <path class="arrowline" d="M498 152 V184"/><path class="arrowline" d="M578 120 H793 V450 H784"/><path class="arrowline" d="M698 366 V397"/>
+    <path class="arrowline" d="M343 396 H415"/><path class="arrowline" d="M343 396 H365 V278 H433"/>
+    <path class="returnline" d="M778 328 H798 V179 H678 V237"/>
+
+    <rect class="block" x="881" y="103" width="208" height="76"/><text class="label" x="985" y="132">条件表示 zₜ</text><text class="small" x="985" y="156">Prompt Encoder 输出</text>
+    <rect class="block" x="881" y="253" width="208" height="102"/><text class="title" x="985" y="284">原 Diffusion Model</text><text class="small" x="985" y="312">当前观测 + zₜ</text><text class="small" x="985" y="337">多步去噪 · 结构不变</text>
+    <rect class="block" x="881" y="428" width="208" height="69"/><text class="label" x="985" y="457">预测动作段</text><text class="small" x="985" y="480">执行后进入下一决策步</text>
+    <path class="arrowline" d="M780 450 H833 V140 H877"/><path class="arrowline" d="M985 179 V249"/><path class="arrowline" d="M985 355 V424"/>
+    <text class="small" x="180" y="562">示教在每条 rollout 中编码一次</text>
+    <text class="small" x="600" y="562">每次决策更新一次 pₜ</text>
+    <text class="small" x="985" y="562">去噪步不更新 pₜ</text>
+  </svg>
+
+  <h2>3. 算法定义</h2>
+  <p>\(h_j\) 是第 \(j\) 个示教片段的编码，\(p_t\) 是机器人第 \(t\) 次决策时对齐到的示教位置，\(x_t\) 是当前观测窗口的表示。\(p_t\) 与示教片段 \(h_j\) 使用不同符号。</p>
+
+  <h3>3.1 对齐位置更新</h3>
+  <p>对齐位置的初始值默认为0；\(p_t\) 是第 \(t\) 次决策在示教中的位置，由上一位置加本次前进步长得到。</p>
+  <div class="formula key">\[p_0=0,\qquad p_t=p_{t-1}+\Delta p_t\quad(t\geq1),\qquad \Delta p_t=\operatorname{softplus}(w^{\top}u_t+b)>0.\]</div>
+  <p>\(u_t\) 是 LSTM 隐藏状态。模型先根据旧位置读出附近的示教内容 \(g_t\)，再结合当前观测 \(x_t\) 更新状态并算出步长。</p>
+  <div class="formula compact">\[a_{t,j}^{(k)}=\operatorname{softmax}_{j}\!\left(\beta_{\mathrm{align}}^{(k)}(p_{t-1}-j)\right),\quad g_t=\operatorname{Concat}_{k}\!\left(\sum_{j=0}^{N-1}a_{t,j}^{(k)}h_j\right),\quad (u_t,c_t)=\operatorname{LSTM}\!\left([x_t,g_t],(u_{t-1},c_{t-1})\right).\]</div>
+
+  <section class="algorithm-step">
+  <h3>3.2 插值相对位置偏置（IRPB）</h3>
+  <p>计算示教片段到 \(p_t\) 的距离，并在相邻分桶间插值，得到对 \(p_t\) 可微的位置偏置。</p>
+  <div class="formula key">\[d_{t,j}=p_t-j,\qquad \beta^{(\ell,k)}(d_{t,j})=(1-r)b^{(\ell,k)}_{\operatorname{sgn}(\eta)m}+r b^{(\ell,k)}_{\operatorname{sgn}(\eta)(m+1)}.\]</div>
+  <p>\(\eta\) 是距离对应的连续分桶位置，\(m\) 是左侧分桶，\(r\) 是插值权重；近距离分桶细，远距离分桶粗。</p>
+  <div class="formula">\[\eta=f(d_{t,j}),\qquad m=\lfloor|\eta|\rfloor,\qquad r=|\eta|-m.\]</div>
+  <div class="formula compact">\[f(d)=\begin{cases}d,&0\leq d&lt;B/2,\\[2pt]B/2+\dfrac{\log(d/(B/2))}{\log(D/(B/2))}(B/2-1),&B/2\leq d&lt;D,\\[6pt]B-1,&d\geq D,\\[2pt]-f(-d),&d&lt;0.\end{cases}\]</div>
+  <p>\(B\) 是每侧的分桶数量，\(D\) 是最大分桶距离；\(b^{(\ell,k)}\) 是第 \(\ell\) 层、第 \(k\) 个注意力头的偏置表。到达末桶时只读取末桶。</p>
+  </section>
+
+  <section class="algorithm-step">
+  <h3>3.3 远距离惩罚</h3>
+  <p>在 3.2 得到的插值偏置上扣除超出 \(D\) 的距离惩罚，得到最终位置偏置 \(\widetilde\beta\)。</p>
+  <div class="formula key">\[\widetilde\beta^{(\ell,k)}(d)=\beta^{(\ell,k)}(d)-\lambda_{\mathrm{MD}}\max(|d|-D,0).\]</div>
+  <p>偏置表以当前位置附近更高的高斯形状初始化；\(\lambda_{\mathrm{MD}}\) 决定远距离惩罚强度。</p>
+  </section>
+
+  <section class="algorithm-step">
+  <h3>3.4 Prompt Encoder 的 Cross-Attention</h3>
+  <p>把 3.3 得到的最终偏置加到 BPP 的内容匹配分数上，计算当前观测对示教片段的注意力。</p>
+  <div class="formula key">\[s_{t,i,j}^{(\ell,k)}=\frac{q_{t,i}^{(\ell,k)}\cdot k_j^{(\ell,k)}}{\sqrt{d_k}}+\widetilde\beta^{(\ell,k)}(p_t-j).\]</div>
+  <p>\(\alpha_{t,i,j}^{(\ell,k)}\) 是归一化后的注意力权重；Prompt Encoder 据此输出给 Diffusion Model 的条件表示 \(z_t\)。</p>
+  <div class="formula">\[\alpha_{t,i,j}^{(\ell,k)}=\operatorname{softmax}_{j}\!\left(s_{t,i,j}^{(\ell,k)}+M_j\right),\qquad z_t=\operatorname{PromptEncoder}(x_t,H,p_t).\]</div>
+  <p>\(i\) 是当前观测 token，\(j\) 是示教片段，\(M_j\) 是 padding mask。示教分块池化、Prompt Encoder 的 self-attention 和 Diffusion Model 的网络结构保持原样。</p>
+  </section>
+
+  <h3>3.5 动作生成与训练损失</h3>
+  <p>Diffusion Model 在每次机器人决策中固定使用同一个 \(z_t\)，并用 BPP 原有的噪声预测损失联合训练全部模块。</p>
+  <div class="formula key">\[\mathcal L_{\mathrm{diff}}=\mathbb E_{t,\tau,\epsilon}\left[\left\|\epsilon-\epsilon_\theta\!\left(A_t^{(\tau)},\tau,x_t,z_t\right)\right\|_2^2\right].\]</div>
+  <p>\(z_t\) 每次决策产生一次；Diffusion Model 的去噪步不更新 \(p_t\)。</p>
+
+  <h2>4. 备注</h2>
+  <p>\(p_t\) 单调递增，为 Cross-Attention 提供随决策步向前移动的位置参考；最终注意力仍由内容匹配与位置偏置共同决定。因此，这一机制不能保证完全消除回溯或死循环：模型仍可能在 \(p_t\) 附近反复关注相近的示教片段，也可能在内容匹配足够强时关注更早的片段。</p>
+
+  <h2>5. 训练方式</h2>
+  <p><strong>主实验选择端到端联合训练。</strong>VAT 对齐模块、BPP Prompt Encoder 和原 Diffusion Model 一起接受 diffusion loss 的梯度。Diffusion Model 的结构与损失不改，但参数继续训练。</p>
+  <ol>
+    <li>先运行原 BPP，作为同数据、同任务划分下的对照。</li>
+    <li>沿用可复用的 BPP 权重；新加入的 LSTM 和 IRPB 单独初始化。</li>
+    <li>用连续轨迹窗口训练 VAT 状态递推；窗口内保留跨决策步梯度。长窗口可使用截断反向传播。</li>
+    <li>每个决策步的 \(z_t\) 连接到原 Diffusion Model，中间不截断梯度。</li>
+  </ol>
+  <p>冻结 Diffusion Model 并单独训练 VAT 不是主实验：VAT 没有直接的位置标签，而原 Diffusion Model 也需要适应新的条件表示。</p>
+</main>
+</body>
+</html>
