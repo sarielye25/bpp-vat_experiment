@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Standalone cross-platform drawing recorder for BPP DrawAnything prompts.
 
 This file deliberately does not import BPP, PyTorch, zarr, or pymunk.  It only
@@ -13,6 +13,7 @@ or precomputed embedding is stored.
 Typical use::
 
     pip install numpy pygame
+    python offline_draw.py  # draw prompt/draw_prompt_001.npz, then 002, ...
     python offline_draw.py -o cat.npz --task-name cat
 
 Controls::
@@ -406,6 +407,16 @@ def normalize_task_name(raw: str) -> str:
     return f"draw {suffix}"
 
 
+def _next_prompt_path(directory: Path) -> Path:
+    """Append after the highest saved number, without reusing gaps."""
+    highest = 0
+    for path in directory.glob("draw_prompt_*.npz"):
+        number = path.stem[len("draw_prompt_"):]
+        if number.isascii() and number.isdigit():
+            highest = max(highest, int(number))
+    return directory / f"draw_prompt_{highest + 1:03d}.npz"
+
+
 def _default_task_name(output: Path) -> str:
     stem = output.stem
     if stem.lower().startswith("draw_"):
@@ -559,7 +570,9 @@ def _mouse_in_canvas() -> Tuple[int, int]:
 
 
 def run_interactive(args: argparse.Namespace) -> int:
-    output = Path(args.output).expanduser()
+    # Keep automatic recordings next to this script, regardless of terminal cwd.
+    output = (Path(args.output).expanduser() if args.output else
+              _next_prompt_path(Path(__file__).resolve().parent / "draw prompt"))
     if output.suffix.lower() != ".npz":
         output = output.with_name(output.name + ".npz")
     if output.exists() and not args.force:
@@ -782,8 +795,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "-o",
         "--output",
-        default="drawing_prompt.npz",
-        help="output .npz path (a .npz suffix is added when missing)",
+        default=None,
+        help="explicit output .npz path; otherwise auto-number in 'draw prompt' next to this script",
     )
     parser.add_argument(
         "--task-name",
@@ -831,3 +844,4 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
